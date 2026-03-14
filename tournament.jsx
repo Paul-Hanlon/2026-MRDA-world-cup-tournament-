@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { track } from "@vercel/analytics";
 
 const TEAMS = {
   FRA: "France", JPN: "Japan", SPA: "Spain", MEX: "Mexico",
@@ -467,18 +468,26 @@ export default function TournamentTracker() {
   const [tab, setTab] = useState("groups");
   const [loaded, setLoaded] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const sessionStart = useRef(Date.now());
+  const maxScroll = useRef(0);
 
   // Load from storage
   useEffect(() => {
     (async () => {
+      let isReturn = false;
       try {
         const result = await window.storage.get("tournament-scores-2026");
         if (result?.value) {
           const parsed = JSON.parse(result.value);
           setScores(prev => ({ ...prev, ...parsed }));
+          isReturn = true;
         }
       } catch (e) { /* no saved data */ }
       setLoaded(true);
+      track("session_start", {
+        is_return_visit: isReturn,
+        day: new Date().toLocaleDateString("en-US", { weekday: "long" })
+      });
     })();
   }, []);
 
@@ -490,14 +499,58 @@ export default function TournamentTracker() {
     })();
   }, [scores, loaded]);
 
+  // Track scroll depth
+  useEffect(() => {
+    const onScroll = () => {
+      const scrollPct = Math.round(
+        (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100
+      );
+      if (scrollPct > maxScroll.current) maxScroll.current = scrollPct;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Track time on page + max scroll on unload
+  useEffect(() => {
+    const onUnload = () => {
+      const seconds = Math.round((Date.now() - sessionStart.current) / 1000);
+      track("session_end", { duration_seconds: seconds, max_scroll_pct: maxScroll.current, tab });
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, [tab]);
+
+  // Track tab views
+  const handleTabChange = useCallback((newTab) => {
+    track("tab_view", { tab: newTab });
+    setTab(newTab);
+  }, []);
+
   const handleScoreChange = useCallback((gameId, side, value) => {
-    setScores(prev => ({
-      ...prev,
-      [gameId]: { ...prev[gameId], [side]: value === "" ? "" : value }
-    }));
+    setScores(prev => {
+      const next = { ...prev, [gameId]: { ...prev[gameId], [side]: value === "" ? "" : value } };
+      const updated = next[gameId];
+      if (updated.home !== "" && updated.away !== "") {
+        const groupGame = GROUP_GAMES.find(g => g.id === gameId);
+        const bracketGame = BRACKET_TEMPLATE.find(b => b.id === gameId);
+        track("score_update", {
+          game_id: gameId,
+          type: groupGame ? "group" : "bracket",
+          group: groupGame ? groupGame.group : undefined,
+          round: bracketGame ? bracketGame.label : groupGame?.round
+        });
+        // Check if bracket is fully filled
+        const bracketIds = BRACKET_TEMPLATE.map(b => b.id);
+        const allBracketFilled = bracketIds.every(id => next[id]?.home !== "" && next[id]?.away !== "");
+        if (allBracketFilled) track("bracket_complete");
+      }
+      return next;
+    });
   }, []);
 
   const resetAll = () => {
+    track("reset_all", { games_played: gamesPlayed });
     setScores(getInitialScores());
     setConfirmReset(false);
     (async () => { try { await window.storage.delete("tournament-scores-2026"); } catch(e) {} })();
@@ -572,12 +625,12 @@ export default function TournamentTracker() {
         display: "flex", gap: 0, borderBottom: "1px solid #e2e8f0", background: "#fff",
         overflowX: "auto", position: "sticky", top: 90, zIndex: 99
       }}>
-        <Tab label="Groups" active={tab === "groups"} onClick={() => setTab("groups")} icon="📊" />
-        <Tab label="Schedule" active={tab === "schedule"} onClick={() => setTab("schedule")} icon="📅" />
-        <Tab label="Rankings" active={tab === "rankings"} onClick={() => setTab("rankings")} icon="🏅" />
-        <Tab label="Bracket" active={tab === "bracket"} onClick={() => setTab("bracket")} icon="🏆" />
-        <Tab label="9-20 Play" active={tab === "lower"} onClick={() => setTab("lower")} icon="📋" />
-        <Tab label="Finals" active={tab === "finals"} onClick={() => setTab("finals")} icon="⭐" />
+        <Tab label="Groups" active={tab === "groups"} onClick={() => handleTabChange("groups")} icon="📊" />
+        <Tab label="Schedule" active={tab === "schedule"} onClick={() => handleTabChange("schedule")} icon="📅" />
+        <Tab label="Rankings" active={tab === "rankings"} onClick={() => handleTabChange("rankings")} icon="🏅" />
+        <Tab label="Bracket" active={tab === "bracket"} onClick={() => handleTabChange("bracket")} icon="🏆" />
+        <Tab label="9-20 Play" active={tab === "lower"} onClick={() => handleTabChange("lower")} icon="📋" />
+        <Tab label="Finals" active={tab === "finals"} onClick={() => handleTabChange("finals")} icon="⭐" />
       </div>
 
       <div style={{ padding: 16 }}>
