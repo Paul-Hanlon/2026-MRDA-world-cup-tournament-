@@ -564,6 +564,40 @@ export default function TournamentTracker() {
     try { localStorage.removeItem("tournament-scores-2026"); } catch(e) {}
   };
 
+  const exportScores = () => {
+    const data = JSON.stringify(scores, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "tournament-scores-2026.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    track("export_scores", { games_played: gamesPlayed });
+  };
+
+  const importScores = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target.result);
+          setScores(prev => ({ ...prev, ...parsed }));
+          track("import_scores", { games_played: Object.values(parsed).filter(s => s.home !== "" && s.away !== "").length });
+        } catch {
+          alert("Invalid file. Please select a valid tournament scores JSON file.");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
   const gamesPlayed = useMemo(() => Object.values(scores).filter(s => s.home !== "" && s.away !== "").length, [scores]);
   const groupGamesPlayed = useMemo(() => GROUP_GAMES.filter(g => { const s = scores[g.id]; return s && s.home !== "" && s.away !== ""; }).length, [scores]);
   const groupsComplete = useMemo(() => allGroupGamesComplete(scores), [scores]);
@@ -598,6 +632,14 @@ export default function TournamentTracker() {
             }}>
               {Math.round((gamesPlayed / 54) * 100)}%
             </div>
+            <button onClick={exportScores} style={{
+              background: "#0d9488", color: "#fff", border: "none", borderRadius: 6,
+              padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer"
+            }}>Export</button>
+            <button onClick={importScores} style={{
+              background: "#2563eb", color: "#fff", border: "none", borderRadius: 6,
+              padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer"
+            }}>Import</button>
             {!confirmReset ? (
               <button onClick={() => setConfirmReset(true)} style={{
                 background: "#dc2626", color: "#fff", border: "none", borderRadius: 6,
