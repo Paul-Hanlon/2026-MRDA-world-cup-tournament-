@@ -363,16 +363,15 @@ function BracketGame({ tmpl, scores, onScoreChange }) {
   const sc = scores[tmpl.id] || { home: "", away: "" };
   const played = sc.home !== "" && sc.away !== "";
   const h = parseInt(sc.home), a = parseInt(sc.away);
-  const tied = played && !isNaN(h) && !isNaN(a) && h === a;
   const homeWin = played && h > a;
   const awayWin = played && a > h;
 
   return (
     <div style={{
       background: "#fff", borderRadius: 10,
-      border: tied ? "2px solid #f59e0b" : played ? "2px solid #22c55e" : "1px solid #e2e8f0",
+      border: played ? "2px solid #22c55e" : "1px solid #e2e8f0",
       padding: 12, minWidth: 220,
-      boxShadow: tied ? "0 0 12px rgba(245,158,11,0.25)" : played ? "0 0 12px rgba(34,197,94,0.15)" : "0 1px 3px rgba(0,0,0,0.06)"
+      boxShadow: played ? "0 0 12px rgba(34,197,94,0.15)" : "0 1px 3px rgba(0,0,0,0.06)"
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{
@@ -394,14 +393,6 @@ function BracketGame({ tmpl, scores, onScoreChange }) {
           <ScoreInput value={sc.away} onChange={v => onScoreChange(tmpl.id, "away", v)} />
         </div>
       </div>
-      {tied && (
-        <div style={{
-          marginTop: 6, padding: "4px 8px", background: "#fef3c7", borderRadius: 4,
-          fontSize: 11, color: "#92400e", fontWeight: 600, textAlign: "center"
-        }}>
-          Tied scores — bracket games cannot end in a draw
-        </div>
-      )}
     </div>
   );
 }
@@ -480,6 +471,7 @@ export default function TournamentTracker() {
   const [tab, setTab] = useState("groups");
   const [loaded, setLoaded] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [drawAlert, setDrawAlert] = useState(null);
   const sessionStart = useRef(Date.now());
   const maxScroll = useRef(0);
 
@@ -540,6 +532,12 @@ export default function TournamentTracker() {
       const next = { ...prev, [gameId]: { ...prev[gameId], [side]: value === "" ? "" : value } };
       const updated = next[gameId];
       if (updated.home !== "" && updated.away !== "") {
+        const h = parseInt(updated.home), a = parseInt(updated.away);
+        if (!isNaN(h) && !isNaN(a) && h === a) {
+          setDrawAlert(gameId);
+          return { ...prev, [gameId]: { home: "", away: "" } };
+        }
+        setDrawAlert(null);
         const groupGame = GROUP_GAMES.find(g => g.id === gameId);
         const bracketGame = BRACKET_TEMPLATE.find(b => b.id === gameId);
         track("score_update", {
@@ -609,6 +607,21 @@ export default function TournamentTracker() {
       overflowX: "hidden"
     }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+      {drawAlert !== null && (
+        <div style={{
+          position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
+          zIndex: 1000, background: "#dc2626", color: "#fff", padding: "12px 24px",
+          borderRadius: 8, fontWeight: 700, fontSize: 14, boxShadow: "0 4px 20px rgba(220,38,38,0.4)",
+          display: "flex", alignItems: "center", gap: 10, animation: "fadeIn 0.2s ease-out"
+        }}>
+          <span>Draws are not allowed — scores for Game {drawAlert} have been reset</span>
+          <button onClick={() => setDrawAlert(null)} style={{
+            background: "rgba(255,255,255,0.2)", border: "none", color: "#fff",
+            borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontWeight: 700, fontSize: 16
+          }}>✕</button>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{
