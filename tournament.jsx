@@ -213,7 +213,7 @@ function resolveBracketTeam(seed, scores) {
   if (!entry) return null;
   const [gameId, wl] = entry;
   const r = gameResult(scores, gameId);
-  if (!r) return null;
+  if (!r || r.h === r.a) return null;
   const winnerSide = r.h > r.a ? "home" : "away";
   const side = wl === "w" ? winnerSide : (winnerSide === "home" ? "away" : "home");
   return resolveBracketGame(gameId, scores, side);
@@ -362,14 +362,17 @@ function BracketGame({ tmpl, scores, onScoreChange }) {
   const awayTeam = resolveBracketTeam(tmpl.awaySeed, scores);
   const sc = scores[tmpl.id] || { home: "", away: "" };
   const played = sc.home !== "" && sc.away !== "";
-  const homeWin = played && parseInt(sc.home) > parseInt(sc.away);
-  const awayWin = played && parseInt(sc.away) > parseInt(sc.home);
+  const h = parseInt(sc.home), a = parseInt(sc.away);
+  const tied = played && !isNaN(h) && !isNaN(a) && h === a;
+  const homeWin = played && h > a;
+  const awayWin = played && a > h;
 
   return (
     <div style={{
-      background: "#fff", borderRadius: 10, border: played ? "2px solid #22c55e" : "1px solid #e2e8f0",
+      background: "#fff", borderRadius: 10,
+      border: tied ? "2px solid #f59e0b" : played ? "2px solid #22c55e" : "1px solid #e2e8f0",
       padding: 12, minWidth: 220,
-      boxShadow: played ? "0 0 12px rgba(34,197,94,0.15)" : "0 1px 3px rgba(0,0,0,0.06)"
+      boxShadow: tied ? "0 0 12px rgba(245,158,11,0.25)" : played ? "0 0 12px rgba(34,197,94,0.15)" : "0 1px 3px rgba(0,0,0,0.06)"
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{
@@ -391,6 +394,14 @@ function BracketGame({ tmpl, scores, onScoreChange }) {
           <ScoreInput value={sc.away} onChange={v => onScoreChange(tmpl.id, "away", v)} />
         </div>
       </div>
+      {tied && (
+        <div style={{
+          marginTop: 6, padding: "4px 8px", background: "#fef3c7", borderRadius: 4,
+          fontSize: 11, color: "#92400e", fontWeight: 600, textAlign: "center"
+        }}>
+          Tied scores — bracket games cannot end in a draw
+        </div>
+      )}
     </div>
   );
 }
@@ -474,30 +485,26 @@ export default function TournamentTracker() {
 
   // Load from storage
   useEffect(() => {
-    (async () => {
-      let isReturn = false;
-      try {
-        const result = await window.storage.get("tournament-scores-2026");
-        if (result?.value) {
-          const parsed = JSON.parse(result.value);
-          setScores(prev => ({ ...prev, ...parsed }));
-          isReturn = true;
-        }
-      } catch (e) { /* no saved data */ }
-      setLoaded(true);
-      track("session_start", {
-        is_return_visit: isReturn,
-        day: new Date().toLocaleDateString("en-US", { weekday: "long" })
-      });
-    })();
+    let isReturn = false;
+    try {
+      const stored = localStorage.getItem("tournament-scores-2026");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setScores(prev => ({ ...prev, ...parsed }));
+        isReturn = true;
+      }
+    } catch (e) { /* no saved data */ }
+    setLoaded(true);
+    track("session_start", {
+      is_return_visit: isReturn,
+      day: new Date().toLocaleDateString("en-US", { weekday: "long" })
+    });
   }, []);
 
   // Save to storage on change
   useEffect(() => {
     if (!loaded) return;
-    (async () => {
-      try { await window.storage.set("tournament-scores-2026", JSON.stringify(scores)); } catch (e) {}
-    })();
+    try { localStorage.setItem("tournament-scores-2026", JSON.stringify(scores)); } catch (e) {}
   }, [scores, loaded]);
 
   // Track scroll depth
@@ -554,7 +561,7 @@ export default function TournamentTracker() {
     track("reset_all", { games_played: gamesPlayed });
     setScores(getInitialScores());
     setConfirmReset(false);
-    (async () => { try { await window.storage.delete("tournament-scores-2026"); } catch(e) {} })();
+    try { localStorage.removeItem("tournament-scores-2026"); } catch(e) {}
   };
 
   const gamesPlayed = useMemo(() => Object.values(scores).filter(s => s.home !== "" && s.away !== "").length, [scores]);
@@ -825,30 +832,18 @@ export default function TournamentTracker() {
               </h4>
               {(() => {
                 const positions = [];
-                // 1st/2nd from Game 54
-                const g54 = scores[54];
-                if (g54?.home !== "" && g54?.away !== "") {
-                  const h = resolveBracketGame(54, scores, "home"), a = resolveBracketGame(54, scores, "away");
-                  if (parseInt(g54.home) > parseInt(g54.away)) { positions.push({ pos: "1st", team: h }); positions.push({ pos: "2nd", team: a }); }
-                  else { positions.push({ pos: "1st", team: a }); positions.push({ pos: "2nd", team: h }); }
-                }
-                const g53 = scores[53];
-                if (g53?.home !== "" && g53?.away !== "") {
-                  const h = resolveBracketGame(53, scores, "home"), a = resolveBracketGame(53, scores, "away");
-                  if (parseInt(g53.home) > parseInt(g53.away)) { positions.push({ pos: "3rd", team: h }); positions.push({ pos: "4th", team: a }); }
-                  else { positions.push({ pos: "3rd", team: a }); positions.push({ pos: "4th", team: h }); }
-                }
-                const g52 = scores[52];
-                if (g52?.home !== "" && g52?.away !== "") {
-                  const h = resolveBracketGame(52, scores, "home"), a = resolveBracketGame(52, scores, "away");
-                  if (parseInt(g52.home) > parseInt(g52.away)) { positions.push({ pos: "5th", team: h }); positions.push({ pos: "6th", team: a }); }
-                  else { positions.push({ pos: "5th", team: a }); positions.push({ pos: "6th", team: h }); }
-                }
-                const g51 = scores[51];
-                if (g51?.home !== "" && g51?.away !== "") {
-                  const h = resolveBracketGame(51, scores, "home"), a = resolveBracketGame(51, scores, "away");
-                  if (parseInt(g51.home) > parseInt(g51.away)) { positions.push({ pos: "7th", team: h }); positions.push({ pos: "8th", team: a }); }
-                  else { positions.push({ pos: "7th", team: a }); positions.push({ pos: "8th", team: h }); }
+                const placings = [
+                  [54, "1st", "2nd"],
+                  [53, "3rd", "4th"],
+                  [52, "5th", "6th"],
+                  [51, "7th", "8th"],
+                ];
+                for (const [gameId, winLabel, loseLabel] of placings) {
+                  const r = gameResult(scores, gameId);
+                  if (!r) continue;
+                  const h = resolveBracketGame(gameId, scores, "home"), a = resolveBracketGame(gameId, scores, "away");
+                  if (r.h > r.a) { positions.push({ pos: winLabel, team: h }); positions.push({ pos: loseLabel, team: a }); }
+                  else { positions.push({ pos: winLabel, team: a }); positions.push({ pos: loseLabel, team: h }); }
                 }
 
                 if (positions.length === 0) return <p style={{ color: "#94a3b8", fontStyle: "italic" }}>Complete the final games to see podium</p>;
