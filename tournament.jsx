@@ -90,8 +90,8 @@ const BRACKET_TEMPLATE = [
   { id: 49, label: "R-11/12", homeSeed: "G11", awaySeed: "G12", day: "SAT", time: "21:00", venue: "Palais" },
   { id: 50, label: "R-9/10", homeSeed: "G9", awaySeed: "G10", day: "SUN", time: "09:00", venue: "Palais" },
   { id: 51, label: "7th/8th", homeSeed: "LTE1", awaySeed: "LTE2", day: "SUN", time: "11:00", venue: "Palais" },
-  { id: 52, label: "5th/6th", homeSeed: "LS1", awaySeed: "LS2", day: "SUN", time: "13:00", venue: "Palais" },
-  { id: 53, label: "3rd/4th", homeSeed: "LS1F", awaySeed: "LS2F", day: "SUN", time: "17:00", venue: "Palais" },
+  { id: 52, label: "5th/6th", homeSeed: "WTE1", awaySeed: "WTE2", day: "SUN", time: "13:00", venue: "Palais" },
+  { id: 53, label: "3rd/4th", homeSeed: "LS1", awaySeed: "LS2", day: "SUN", time: "17:00", venue: "Palais" },
   { id: 54, label: "FINAL", homeSeed: "WS1", awaySeed: "WS2", day: "SUN", time: "19:00", venue: "Palais" },
 ];
 
@@ -209,12 +209,12 @@ function resolveBracketTeam(seed, scores) {
   if (seed === "WS2") { const s = scores[48]; if (s?.home !== "" && s?.away !== "") return parseInt(s.home) > parseInt(s.away) ? resolveBracketGame(48, scores, "home") : resolveBracketGame(48, scores, "away"); return null; }
   if (seed === "LS1") { const s = scores[47]; if (s?.home !== "" && s?.away !== "") return parseInt(s.home) < parseInt(s.away) ? resolveBracketGame(47, scores, "home") : resolveBracketGame(47, scores, "away"); return null; }
   if (seed === "LS2") { const s = scores[48]; if (s?.home !== "" && s?.away !== "") return parseInt(s.home) < parseInt(s.away) ? resolveBracketGame(48, scores, "home") : resolveBracketGame(48, scores, "away"); return null; }
+  // TE winners for 5th/6th
+  if (seed === "WTE1") { const s = scores[44]; if (s?.home !== "" && s?.away !== "") return parseInt(s.home) > parseInt(s.away) ? resolveBracketGame(44, scores, "home") : resolveBracketGame(44, scores, "away"); return null; }
+  if (seed === "WTE2") { const s = scores[45]; if (s?.home !== "" && s?.away !== "") return parseInt(s.home) > parseInt(s.away) ? resolveBracketGame(45, scores, "home") : resolveBracketGame(45, scores, "away"); return null; }
   // TE losers for 7th/8th
   if (seed === "LTE1") { const s = scores[44]; if (s?.home !== "" && s?.away !== "") return parseInt(s.home) < parseInt(s.away) ? resolveBracketGame(44, scores, "home") : resolveBracketGame(44, scores, "away"); return null; }
   if (seed === "LTE2") { const s = scores[45]; if (s?.home !== "" && s?.away !== "") return parseInt(s.home) < parseInt(s.away) ? resolveBracketGame(45, scores, "home") : resolveBracketGame(45, scores, "away"); return null; }
-  // 3rd/4th losers of semis
-  if (seed === "LS1F") { return resolveBracketTeam("LS1", scores); }
-  if (seed === "LS2F") { return resolveBracketTeam("LS2", scores); }
   return null;
 }
 
